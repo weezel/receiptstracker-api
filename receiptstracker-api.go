@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -35,7 +36,7 @@ var allowedExtensions []string = []string{
 }
 
 var purchaseDatePat = regexp.MustCompile(`^[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}$`)
-var expiryDatePat = regexp.MustCompile(`"^[0-9]+_(day|month|year)s?$`)
+var expiryDatePat = regexp.MustCompile(`^[0-9]+_(day|month|year)s?$`)
 var reStripTrailingSlash = regexp.MustCompile(`/$`)
 var fileStoreAbsPath string
 var loggingFileAbsPath string
@@ -78,17 +79,42 @@ func parsePurchaseDate(tags *[]string) (time.Time, error) {
 			return dtime, nil
 		}
 	}
-	return time.Time{}, nil
+	return time.Time{}, errors.New("Couldn't find or parse date")
 
 }
 
-func parseExpiryDate(tags []string) (time.Time, error) {
-	for _, t := range tags {
+func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
+	for i, t := range *tags {
 		found := expiryDatePat.FindString(t)
 		if found == "" {
-			return time.Time{}, nil
+			continue
 		}
 
+		parsedNumber := regexp.MustCompile(`[0-9]+`).FindString(t)
+		if parsedNumber == "" {
+			log.Printf("Found day|month|year %s but couldn't parse numbers", t)
+			continue
+		}
+		var numberVal int
+		numberVal, err := strconv.Atoi(parsedNumber)
+		if err != nil {
+			log.Printf("Error while parsing %s as a number", parsedNumber)
+			continue
+		}
+
+		days := regexp.MustCompile(`days?$`).FindString(t)
+		months := regexp.MustCompile(`months?$`).FindString(t)
+		years := regexp.MustCompile(`years?$`).FindString(t)
+		if days != "" {
+			*tags = deleteFromSlice(*tags, i)
+			return startDate.AddDate(0, 0, numberVal), nil
+		} else if months != "" {
+			*tags = deleteFromSlice(*tags, i)
+			return startDate.AddDate(0, numberVal, 0), nil
+		} else if years != "" {
+			*tags = deleteFromSlice(*tags, i)
+			return startDate.AddDate(numberVal, 0, 0), nil
+		}
 	}
 	return time.Time{}, nil
 }
