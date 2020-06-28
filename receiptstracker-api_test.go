@@ -7,6 +7,7 @@ import (
 )
 
 func Test_parseExpiryDate(t *testing.T) {
+	t.Parallel()
 	type args struct {
 		tags      *[]string
 		startDate time.Time
@@ -62,7 +63,9 @@ func Test_parseExpiryDate(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := parseExpiryDate(tt.args.tags, tt.args.startDate)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("%s: parseExpiryDate() error = %v, wantErr %v",
@@ -82,6 +85,7 @@ func Test_parseExpiryDate(t *testing.T) {
 }
 
 func Test_parsePurchaseDate(t *testing.T) {
+	t.Parallel()
 	type args struct {
 		tags *[]string
 	}
@@ -105,7 +109,9 @@ func Test_parsePurchaseDate(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := parsePurchaseDate(tt.args.tags)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("%s: parsePurchaseDate() error = %v, wantErr %v",
@@ -116,6 +122,66 @@ func Test_parsePurchaseDate(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("%s: parsePurchaseDate() = %v, want %v",
+					tt.name,
+					got,
+					tt.want)
+			}
+		})
+	}
+}
+
+func Test_normaliseTags(t *testing.T) {
+	t.Parallel()
+	type args struct {
+		tags string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *[]string
+	}{
+		{
+			"No tags",
+			args{""},
+			&[]string{},
+		},
+		{
+			"One tag",
+			args{"testtag"},
+			&[]string{"testtag"},
+		},
+		{
+			"Two tags",
+			args{"test tag"},
+			&[]string{"test", "tag"},
+		},
+		{
+			"Much space wow",
+			args{"te  st     tag"},
+			&[]string{"te", "st", "tag"},
+		},
+		{
+			"Leading space",
+			args{" te   tag"},
+			&[]string{"te", "tag"},
+		},
+		{
+			"Trailing space",
+			args{"te   tag "},
+			&[]string{"te", "tag"},
+		},
+		{
+			"Leading and trailing space",
+			args{" te   tag "},
+			&[]string{"te", "tag"},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := normaliseTags(tt.args.tags); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("%s: normaliseTags() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)

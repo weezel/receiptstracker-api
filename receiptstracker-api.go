@@ -1,8 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
@@ -10,22 +15,20 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 )
 
-type LogEntry string
-
-type HtmlRenderElement struct {
-	LogEntries   []LogEntry
-	NextGreasing string
-}
-
 const (
-	port            string = ":8081"
-	maxFileSite     int    = 16 * 1024 * 1024
-	uploadDirectory string = "uploads"
+	PORT             string = ":8081"
+	MAX_FILE_SIZE    int    = 16 * 1024 * 1024
+	UPLOAD_DIRECTORY string = "uploads"
 )
+
+var purchaseDatePat = regexp.MustCompile(`^[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}$`)
+var expiryDatePat = regexp.MustCompile(`^[0-9]+_(day|month|year)s?$`)
+var reStripTrailingSlash = regexp.MustCompile(`/$`)
+var fileStoreAbsPath string
+var loggingFileAbsPath string
 
 var allowedExtensions []string = []string{
 	"gif",
@@ -34,12 +37,6 @@ var allowedExtensions []string = []string{
 	"png",
 	"tiff",
 }
-
-var purchaseDatePat = regexp.MustCompile(`^[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}$`)
-var expiryDatePat = regexp.MustCompile(`^[0-9]+_(day|month|year)s?$`)
-var reStripTrailingSlash = regexp.MustCompile(`/$`)
-var fileStoreAbsPath string
-var loggingFileAbsPath string
 
 func deleteFromSlice(a []string, i int) []string {
 	return append(a[:i], a[i+1:]...)
@@ -119,6 +116,63 @@ func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
 	return time.Time{}, nil
 }
 
+// TODO Parameterize out writer
+func saveFile(formFile *multipart.File, formFileHeaders *multipart.FileHeader) (string, error) {
+
+	binFile, err := ioutil.ReadAll(*formFile)
+	if err != nil {
+		log.Printf("Error while reading file %v: %v",
+			formFileHeaders,
+			err)
+		return "", err
+	}
+	tmpHash := sha256.Sum256(binFile)
+	fileHash := hex.EncodeToString(tmpHash[:])
+	fileExt := filepath.Ext(formFileHeaders.Filename)
+
+	writePath := filepath.Join(UPLOAD_DIRECTORY, fileHash)
+	if err = ioutil.WriteFile(
+		writePath,
+		binFile, 0600); err != nil {
+		log.Printf("Error writing file %s", fileHash)
+	}
+	log.Printf("Wrote file to %s", writePath)
+
+	fullFileName := fmt.Sprintf("%s.%s", fileHash, fileExt)
+	return fullFileName, nil
+}
+
+func loadPage(w http.ResponseWriter, r *http.Request) {
+	page, err := ioutil.ReadFile("resources/send.html")
+	if err != nil {
+		log.Printf("Error loading page send.hmtl")
+		fmt.Fprintf(w, "Could't load form\r\n")
+		return
+	}
+	fmt.Fprintf(w, "%s", page)
+
+}
+
+func normaliseTags(tags string) *[]string {
+	keys := make(map[string]bool)
+	list := &[]string{}
+	p := regexp.MustCompile(`\s+`)
+	tagsSingleSpaces := p.ReplaceAllString(tags, " ")
+
+	// Remove duplicates
+	for _, entry := range strings.Split(tagsSingleSpaces, " ") {
+		if _, value := keys[entry]; !value {
+			trimmed := strings.Trim(entry, " ")
+			if trimmed == "" {
+				continue
+			}
+			keys[entry] = true
+			*list = append(*list, trimmed)
+		}
+	}
+	return list
+}
+
 func api(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Incoming %s [%s] connection from %s with size %d bytes",
 		r.Method,
@@ -128,36 +182,50 @@ func api(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		t := template.New("receipt_template")
-		t, err := template.ParseFiles("form.html")
-		if err != nil {
-			log.Fatalf("Couldn't load form.html: %v", err)
-		}
-
-		filledInData := HtmlRenderElement{nil, ""}
-		t.Execute(w, filledInData)
+		loadPage(w, r)
 	case "POST":
-		if err := r.ParseForm(); err != nil {
-			log.Printf("Error parsing form\n")
+		// Limit request's maximum size to 16.5 MB
+		r.Body = http.MaxBytesReader(w, r.Body, (16*1024*1024)+512)
+		if err := r.ParseMultipartForm(16 * 1024 * 1024); err != nil {
+			log.Printf("Error: parsing form failed: %v", err)
+			userErrMsg := "Couldn't parse form or mandatory value(s) missing"
+			fmt.Fprintf(w, userErrMsg+"\r\n")
 			return
 		}
 
-		// filename = secure_filename(received_file.filename)
-		// file_binary = received_file.stream.read()
-		// filename_hash = hashlib.sha256(file_binary).hexdigest()
-		// ext = os.path.splitext(filename)[-1].strip(".").lower()
-		// outfile = //{filename_hash}.{ext}")
-		// purchase_date = parse_purchase_date(tags)
-		// expiry_date = parse_expiry_date(purchase_date, tags)
+		tags := normaliseTags(r.FormValue("tags"))
 
-		datePicker := template.HTMLEscapeString(r.FormValue("datePicker"))
-		if len(datePicker) < 1 {
-			fmt.Fprintf(w, "Error, date not appropriate (yyyy-mm-dd)\r\n")
+		formFile, formFileHeaders, err := r.FormFile("file")
+		if err != nil {
+			log.Printf("Error: no file included")
+			fmt.Fprintf(w, "Missing 'file' parameter\r\n")
 			return
 		}
+		filename, err := saveFile(&formFile, formFileHeaders)
+		if err != nil {
+			log.Printf("Error: failed to save file %s", filename)
+			fmt.Fprintf(w, "Failed to save file \r\n")
+			return
+		}
+		log.Printf("Hash for incoming filename %s is %s",
+			formFileHeaders.Filename,
+			filename)
 
-		tmp := fmt.Sprintf("Receipt [%s] '%s' saved\r\n", "daA", "boo")
-		fmt.Fprintf(w, tmp)
+		purchaseDate, err := parsePurchaseDate(tags)
+		if err != nil {
+			fmt.Printf("Error while parsing purchase date: %v", err)
+		}
+		expiryDate, err := parseExpiryDate(tags, purchaseDate)
+		if err != nil {
+			fmt.Printf("Error while parsing expiry date %s: %v",
+				expiryDate,
+				err)
+		}
+
+		doneMsg := fmt.Sprintf("Storing of receipt %s completed",
+			filename)
+		log.Print(doneMsg)
+		fmt.Fprintf(w, doneMsg+"\r\n")
 	default:
 		fmt.Fprintf(w, "Supported methods: GET, POST\r\n")
 	}
@@ -195,8 +263,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", api)
-	log.Printf("Listening on port %q\n", port)
-	if err := http.ListenAndServe(port, mux); err != nil {
-		log.Fatalf("Cannot listen on port %q: %q", port, err)
+	log.Printf("Listening on port %q\n", PORT)
+	if err := http.ListenAndServe(PORT, mux); err != nil {
+		log.Fatalf("Cannot listen on port %q: %q", PORT, err)
 	}
 }
