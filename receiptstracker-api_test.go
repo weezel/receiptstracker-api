@@ -108,6 +108,12 @@ func Test_parsePurchaseDate(t *testing.T) {
 			time.Time{},
 			true,
 		},
+		{
+			"Noe date",
+			args{&[]string{"testing", "not_a_date"}},
+			time.Time{},
+			true,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -237,6 +243,38 @@ func Test_calculateFileHash(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("%s: calculateFileHash() = %v, want %v",
+					tt.name,
+					got,
+					tt.want)
+			}
+		})
+	}
+}
+
+func Test_isAllowedFileExt(t *testing.T) {
+	type args struct {
+		fname string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			"Allowed jpg",
+			args{"t.jpg"},
+			true,
+		},
+		{
+			"Not allowed csv",
+			args{"t.csv"},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isAllowedFileExt(tt.args.fname); got != tt.want {
+				t.Errorf("%s: isAllowerFileExt() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)

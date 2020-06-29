@@ -42,14 +42,17 @@ func deleteFromSlice(a []string, i int) []string {
 	return append(a[:i], a[i+1:]...)
 }
 
-func isAllowerFileExt(fname string) bool {
-	fileExt := strings.ToLower(filepath.Ext(fname))
+func isAllowedFileExt(fname string) bool {
+	fileExt := strings.Trim(
+		strings.ToLower(filepath.Ext(fname)),
+		".",
+	)
 	for _, ext := range allowedExtensions {
-		if ext != fileExt {
-			return false
+		if ext == fileExt {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func pathExists(path string) (bool, error) {
@@ -66,18 +69,19 @@ func pathExists(path string) (bool, error) {
 func parsePurchaseDate(tags *[]string) (time.Time, error) {
 	for i, t := range *tags {
 		found := purchaseDatePat.FindString(t)
-		if found != "" {
-			dtime, err := time.Parse("2006-01-02", t)
-			if err != nil {
-				log.Printf("Error while parsing date '%s'", t)
-				return time.Time{}, err
-			}
-			*tags = deleteFromSlice(*tags, i)
-			return dtime, nil
+		if found == "" {
+			return time.Time{}, errors.New("Couldn't find or parse date")
 		}
+
+		dtime, err := time.Parse("2006-01-02", t)
+		if err != nil {
+			log.Printf("Error while parsing date '%s'", t)
+			return time.Time{}, err
+		}
+		*tags = deleteFromSlice(*tags, i)
+		return dtime, nil
 	}
 	return time.Time{}, errors.New("Couldn't find or parse date")
-
 }
 
 func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
@@ -105,10 +109,12 @@ func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
 		if days != "" {
 			*tags = deleteFromSlice(*tags, i)
 			return startDate.AddDate(0, 0, numberVal), nil
-		} else if months != "" {
+		}
+		if months != "" {
 			*tags = deleteFromSlice(*tags, i)
 			return startDate.AddDate(0, numberVal, 0), nil
-		} else if years != "" {
+		}
+		if years != "" {
 			*tags = deleteFromSlice(*tags, i)
 			return startDate.AddDate(numberVal, 0, 0), nil
 		}
@@ -124,18 +130,6 @@ func calculateFileHash(binFile []byte,
 	fileExt = strings.ToLower(fileExt)
 	if fileExt == "" {
 		return "", errors.New("ERROR: no file extension")
-	}
-
-	allowedExtension := false
-	for _, ext := range allowedExtensions {
-		if fileExt == strings.ToLower(ext) {
-			allowedExtension = true
-			break
-		}
-	}
-	if allowedExtension == false {
-		errorMsg := fmt.Sprintf("Allowed extensions are: %v", allowedExtensions)
-		return "", errors.New(errorMsg)
 	}
 
 	tmpHash := sha256.Sum256(binFile)
@@ -205,6 +199,15 @@ func api(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Missing 'file' parameter\r\n")
 			return
 		}
+
+		if isAllowedFileExt(formFileHeaders.Filename) == false {
+			log.Printf("ERROR: file extension not allowed: %s",
+				formFileHeaders.Filename)
+			fmt.Fprintf(w, "ERROR: File extension not allowed. Allowed extensions: %v\r\n",
+				allowedExtensions)
+			return
+		}
+
 		// Get the binary of the form file
 		binFile, err := ioutil.ReadAll(formFile)
 		if err != nil {
