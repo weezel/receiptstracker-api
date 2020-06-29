@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Receripts upload</title>
+  </head>
+
+<body>
+<h3>Receipt upload:</h3>
+<div>
+  <form method="POST" action="/receipts/" enctype="multipart/form-data">
+      <label>File:&nbsp;&nbsp;</label>
+      <input type="file" name="file" maxsize="30">
+      <br />
+      <br />
+      <label>Tags: </label>
+      <br />
+      <textarea cols="120" rows="5" name="message" type="text" value=""></textarea>
+      <p><input type="submit" value="Send" /></p>
+  </form>
+</div>
+</body>
+
+
+
+</html>

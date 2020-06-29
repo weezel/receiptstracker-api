@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mime/multipart"
 	"reflect"
 	"testing"
 	"time"
@@ -182,6 +183,60 @@ func Test_normaliseTags(t *testing.T) {
 			t.Parallel()
 			if got := normaliseTags(tt.args.tags); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("%s: normaliseTags() = %v, want %v",
+					tt.name,
+					got,
+					tt.want)
+			}
+		})
+	}
+}
+
+func Test_calculateFileHash(t *testing.T) {
+	type args struct {
+		binFile         []byte
+		formFileHeaders *multipart.FileHeader
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			"Null byte",
+			args{[]byte{}, &multipart.FileHeader{}},
+			"",
+			true,
+		},
+		{
+			"Wrong file extension",
+			args{[]byte{0, 1, 0, 1, 0},
+				&multipart.FileHeader{Filename: "test-file.avi"},
+			},
+			"",
+			true,
+		},
+		{
+			"Real content",
+			args{[]byte{0, 1, 0, 1, 0},
+				&multipart.FileHeader{Filename: "test-file.JPEG"},
+			},
+			"01e246b58d8e782fc96881c090d833eefa37e804cb308aeae0f7471c9ef1ea1a.jpeg",
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := calculateFileHash(tt.args.binFile, tt.args.formFileHeaders)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%s: calculateFileHash() error = %v, wantErr %v",
+					tt.name,
+					err,
+					tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("%s: calculateFileHash() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)

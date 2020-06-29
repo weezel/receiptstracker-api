@@ -21,14 +21,14 @@ import (
 const (
 	PORT             string = ":8081"
 	MAX_FILE_SIZE    int    = 16 * 1024 * 1024
-	UPLOAD_DIRECTORY string = "uploads"
+	UPLOAD_DIRECTORY string = "img"
 )
 
 var purchaseDatePat = regexp.MustCompile(`^[0-9]{4}\-[0-9]{1,2}\-[0-9]{1,2}$`)
 var expiryDatePat = regexp.MustCompile(`^[0-9]+_(day|month|year)s?$`)
 var reStripTrailingSlash = regexp.MustCompile(`/$`)
 var fileStoreAbsPath string
-var loggingFileAbsPath string
+var loggingFilePath string
 
 var allowedExtensions []string = []string{
 	"gif",
@@ -116,29 +116,33 @@ func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
 	return time.Time{}, nil
 }
 
-// TODO Parameterize out writer
-func saveFile(formFile *multipart.File, formFileHeaders *multipart.FileHeader) (string, error) {
+func calculateFileHash(binFile []byte,
+	formFileHeaders *multipart.FileHeader) (string, error) {
 
-	binFile, err := ioutil.ReadAll(*formFile)
-	if err != nil {
-		log.Printf("Error while reading file %v: %v",
-			formFileHeaders,
-			err)
-		return "", err
+	tmp := filepath.Ext(formFileHeaders.Filename)
+	fileExt := strings.Trim(tmp, ".")
+	fileExt = strings.ToLower(fileExt)
+	if fileExt == "" {
+		return "", errors.New("ERROR: no file extension")
 	}
+
+	allowedExtension := false
+	for _, ext := range allowedExtensions {
+		if fileExt == strings.ToLower(ext) {
+			allowedExtension = true
+			break
+		}
+	}
+	if allowedExtension == false {
+		errorMsg := fmt.Sprintf("Allowed extensions are: %v", allowedExtensions)
+		return "", errors.New(errorMsg)
+	}
+
 	tmpHash := sha256.Sum256(binFile)
 	fileHash := hex.EncodeToString(tmpHash[:])
-	fileExt := filepath.Ext(formFileHeaders.Filename)
-
-	writePath := filepath.Join(UPLOAD_DIRECTORY, fileHash)
-	if err = ioutil.WriteFile(
-		writePath,
-		binFile, 0600); err != nil {
-		log.Printf("Error writing file %s", fileHash)
-	}
-	log.Printf("Wrote file to %s", writePath)
 
 	fullFileName := fmt.Sprintf("%s.%s", fileHash, fileExt)
+
 	return fullFileName, nil
 }
 
@@ -187,7 +191,7 @@ func api(w http.ResponseWriter, r *http.Request) {
 		// Limit request's maximum size to 16.5 MB
 		r.Body = http.MaxBytesReader(w, r.Body, (16*1024*1024)+512)
 		if err := r.ParseMultipartForm(16 * 1024 * 1024); err != nil {
-			log.Printf("Error: parsing form failed: %v", err)
+			log.Printf("ERROR: parsing form failed: %v", err)
 			userErrMsg := "Couldn't parse form or mandatory value(s) missing"
 			fmt.Fprintf(w, userErrMsg+"\r\n")
 			return
@@ -197,27 +201,50 @@ func api(w http.ResponseWriter, r *http.Request) {
 
 		formFile, formFileHeaders, err := r.FormFile("file")
 		if err != nil {
-			log.Printf("Error: no file included")
+			log.Printf("ERROR: no file included")
 			fmt.Fprintf(w, "Missing 'file' parameter\r\n")
 			return
 		}
-		filename, err := saveFile(&formFile, formFileHeaders)
+		// Get the binary of the form file
+		binFile, err := ioutil.ReadAll(formFile)
 		if err != nil {
-			log.Printf("Error: failed to save file %s", filename)
-			fmt.Fprintf(w, "Failed to save file \r\n")
+			log.Printf("ERROR: reading file %s failed: %v",
+				formFileHeaders.Filename,
+				err)
+			fmt.Fprint(w, "Error while reading file binary\r\n")
+			return
+		}
+
+		filename, err := calculateFileHash(binFile, formFileHeaders)
+		if err != nil {
+			log.Printf("ERROR: file hash calculation for file %s: %v",
+				formFileHeaders.Filename,
+				err)
+			fmt.Fprintf(w, "Error while calculating file hash: %v \r\n",
+				err)
 			return
 		}
 		log.Printf("Hash for incoming filename %s is %s",
 			formFileHeaders.Filename,
 			filename)
 
+		// Write or try to write file
+		writePath := filepath.Join(UPLOAD_DIRECTORY, filename)
+		err = ioutil.WriteFile(writePath, binFile, 0600)
+		if err != nil {
+			log.Printf("Error writing file %s: %v", writePath, err)
+			fmt.Fprintf(w, "Failed to save file \r\n")
+			return
+		}
+		log.Printf("Wrote file to %s", writePath)
+
 		purchaseDate, err := parsePurchaseDate(tags)
 		if err != nil {
-			fmt.Printf("Error while parsing purchase date: %v", err)
+			log.Printf("WARNING: no purchase date: %v", err)
 		}
 		expiryDate, err := parseExpiryDate(tags, purchaseDate)
 		if err != nil {
-			fmt.Printf("Error while parsing expiry date %s: %v",
+			log.Printf("WARNING: no expiry date %s: %v",
 				expiryDate,
 				err)
 		}
@@ -244,12 +271,12 @@ func main() {
 	workingDirectory := reStripTrailingSlash.ReplaceAllString(
 		path.Clean(os.Args[1]), "") + "/"
 	os.Chdir(workingDirectory)
-	loggingFileAbsPath = workingDirectory + "receipts-api.log"
-	storeReceiptsDirAbsPath := workingDirectory + "img/"
+	loggingFilePath = workingDirectory + "receipts-api.log"
+	storeReceiptsDirAbsPath := workingDirectory + UPLOAD_DIRECTORY
 
 	log.SetFlags(log.Ldate | log.Ltime)
 	f, err := os.OpenFile(
-		loggingFileAbsPath,
+		loggingFilePath,
 		os.O_RDWR|os.O_CREATE|os.O_APPEND,
 		0666)
 	if err != nil {
@@ -258,7 +285,7 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
-	fmt.Printf("Using %s directory to store receipts\n",
+	log.Printf("Using %s directory to store receipts\n",
 		storeReceiptsDirAbsPath)
 
 	mux := http.NewServeMux()
