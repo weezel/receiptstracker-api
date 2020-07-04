@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,6 +44,10 @@ func deleteFromSlice(a []string, i int) []string {
 }
 
 func isAllowedFileExt(fname string) bool {
+	if strings.Index(fname, ".") == -1 {
+		return false
+	}
+
 	fileExt := strings.Trim(
 		strings.ToLower(filepath.Ext(fname)),
 		".",
@@ -84,7 +89,7 @@ func parsePurchaseDate(tags *[]string) (time.Time, error) {
 	return time.Time{}, errors.New("Couldn't find or parse date")
 }
 
-func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
+func parseExpiryDate(tags *[]string, startDate time.Time) time.Time {
 	for i, t := range *tags {
 		found := expiryDatePat.FindString(t)
 		if found == "" {
@@ -108,29 +113,29 @@ func parseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
 		years := regexp.MustCompile(`years?$`).FindString(t)
 		if days != "" {
 			*tags = deleteFromSlice(*tags, i)
-			return startDate.AddDate(0, 0, numberVal), nil
+			return startDate.AddDate(0, 0, numberVal)
 		}
 		if months != "" {
 			*tags = deleteFromSlice(*tags, i)
-			return startDate.AddDate(0, numberVal, 0), nil
+			return startDate.AddDate(0, numberVal, 0)
 		}
 		if years != "" {
 			*tags = deleteFromSlice(*tags, i)
-			return startDate.AddDate(numberVal, 0, 0), nil
+			return startDate.AddDate(numberVal, 0, 0)
 		}
 	}
-	return time.Time{}, nil
+	return time.Time{}
 }
 
 func calculateFileHash(binFile []byte,
 	formFileHeaders *multipart.FileHeader) (string, error) {
+	if len(binFile) == 0 {
+		return "", errors.New("Empty file")
+	}
 
 	tmp := filepath.Ext(formFileHeaders.Filename)
 	fileExt := strings.Trim(tmp, ".")
 	fileExt = strings.ToLower(fileExt)
-	if fileExt == "" {
-		return "", errors.New("ERROR: no file extension")
-	}
 
 	tmpHash := sha256.Sum256(binFile)
 	fileHash := hex.EncodeToString(tmpHash[:])
@@ -220,11 +225,8 @@ func api(w http.ResponseWriter, r *http.Request) {
 
 		filename, err := calculateFileHash(binFile, formFileHeaders)
 		if err != nil {
-			log.Printf("ERROR: file hash calculation for file %s: %v",
-				formFileHeaders.Filename,
-				err)
-			fmt.Fprintf(w, "Error while calculating file hash: %v \r\n",
-				err)
+			log.Printf("ERROR: %s", err)
+			fmt.Fprintf(w, "%s\r\n", err)
 			return
 		}
 		log.Printf("Hash for incoming filename %s is %s",
@@ -245,8 +247,8 @@ func api(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: no purchase date: %v", err)
 		}
-		expiryDate, err := parseExpiryDate(tags, purchaseDate)
-		if err != nil {
+		expiryDate := parseExpiryDate(tags, purchaseDate)
+		if reflect.DeepEqual(expiryDate, time.Time{}) {
 			log.Printf("WARNING: no expiry date %s: %v",
 				expiryDate,
 				err)

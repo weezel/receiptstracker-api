@@ -15,66 +15,64 @@ func Test_parseExpiryDate(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		args    args
-		want    time.Time
-		wantErr bool
+		name string
+		args args
+		want time.Time
 	}{
+		{
+			"No expiry date",
+			args{&[]string{"4_habla", "f", "asdf"},
+				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
+			time.Time{},
+		},
+		{
+			"Malformed expire date, no error",
+			args{&[]string{"4_habla", "d_days", "asdf"},
+				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
+			time.Time{},
+		},
 		{
 			"Expiry date 1 day",
 			args{&[]string{"4_habla", "not_a_date", "1_day"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2019, 8, 7, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 		{
 			"Expiry date 60 days",
 			args{&[]string{"4_habla", "not_a_date", "6_days"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2019, 8, 12, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 		{
 			"Expiry date 1 month",
 			args{&[]string{"4_habla", "not_a_date", "1_month"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2019, 9, 6, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 		{
 			"Expiry date 6 months",
 			args{&[]string{"4_habla", "not_a_date", "6_months"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2020, 2, 6, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 		{
 			"Expiry date 1 year",
 			args{&[]string{"4_habla", "not_a_date", "1_year"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2020, 8, 6, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 		{
 			"Expiry date 6 years",
 			args{&[]string{"4_habla", "not_a_date", "6_years"},
 				time.Date(2019, 8, 6, 0, 0, 0, 0, time.UTC)},
 			time.Date(2025, 8, 6, 0, 0, 0, 0, time.UTC),
-			false,
 		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parseExpiryDate(tt.args.tags, tt.args.startDate)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("%s: parseExpiryDate() error = %v, wantErr %v",
-					tt.name,
-					err,
-					tt.wantErr)
-				return
-			}
+			got := parseExpiryDate(tt.args.tags, tt.args.startDate)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("%s: parseExpiryDate() = %v, want %v",
 					tt.name,
@@ -187,7 +185,8 @@ func Test_normaliseTags(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := normaliseTags(tt.args.tags); !reflect.DeepEqual(got, tt.want) {
+			got := normaliseTags(tt.args.tags)
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("%s: normaliseTags() = %v, want %v",
 					tt.name,
 					got,
@@ -211,14 +210,6 @@ func Test_calculateFileHash(t *testing.T) {
 		{
 			"Null byte",
 			args{[]byte{}, &multipart.FileHeader{}},
-			"",
-			true,
-		},
-		{
-			"Wrong file extension",
-			args{[]byte{0, 1, 0, 1, 0},
-				&multipart.FileHeader{Filename: "test-file.avi"},
-			},
 			"",
 			true,
 		},
@@ -261,6 +252,11 @@ func Test_isAllowedFileExt(t *testing.T) {
 		want bool
 	}{
 		{
+			"Plain extension",
+			args{"jpg"},
+			false,
+		},
+		{
 			"Allowed jpg",
 			args{"t.jpg"},
 			true,
@@ -273,7 +269,8 @@ func Test_isAllowedFileExt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isAllowedFileExt(tt.args.fname); got != tt.want {
+			got := isAllowedFileExt(tt.args.fname)
+			if got != tt.want {
 				t.Errorf("%s: isAllowerFileExt() = %v, want %v",
 					tt.name,
 					got,
