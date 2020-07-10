@@ -5,11 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"receiptstracker-api/external"
 	"receiptstracker-api/httpserver"
 	"receiptstracker-api/utils"
 	"regexp"
+	"syscall"
 )
 
 var reStripTrailingSlash = regexp.MustCompile(`/$`)
@@ -29,11 +31,28 @@ func fileLogging() (f *os.File) {
 	return
 }
 
+func signalHandler(signalCh chan os.Signal, doneCh chan struct{}) {
+	for {
+		select {
+		case s := <-signalCh:
+			fmt.Println("Shutting down...")
+			log.Printf("Received signal: %d (%s)", s, s)
+			os.Exit(0)
+			doneCh <- struct{}{}
+		}
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("ERROR: absolute file storage path missing")
 		os.Exit(1)
 	}
+	doneCh := make(chan struct{})
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go signalHandler(signalCh, doneCh)
 
 	dirExists, _ := utils.PathExists(os.Args[1])
 	if !dirExists {
@@ -57,4 +76,6 @@ func main() {
 	if err := http.ListenAndServe(external.PORT, mux); err != nil {
 		log.Fatalf("Cannot listen on port %q: %q", external.PORT, err)
 	}
+
+	<-doneCh
 }
