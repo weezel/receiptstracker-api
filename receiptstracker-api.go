@@ -16,6 +16,19 @@ var reStripTrailingSlash = regexp.MustCompile(`/$`)
 var fileStoreAbsPath string
 var loggingFilePath string
 
+func fileLogging() (f *os.File) {
+	log.SetFlags(log.Ldate | log.Ltime)
+	f, err := os.OpenFile(
+		loggingFilePath,
+		os.O_RDWR|os.O_CREATE|os.O_APPEND,
+		0666)
+	if err != nil {
+		log.Fatalf("Error opening file %v", err)
+	}
+	log.SetOutput(f)
+	return
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("ERROR: absolute file storage path missing")
@@ -32,16 +45,8 @@ func main() {
 	loggingFilePath = workingDirectory + "receipts-api.log"
 	storeReceiptsDirAbsPath := workingDirectory + external.UPLOAD_DIRECTORY
 
-	log.SetFlags(log.Ldate | log.Ltime)
-	f, err := os.OpenFile(
-		loggingFilePath,
-		os.O_RDWR|os.O_CREATE|os.O_APPEND,
-		0666)
-	if err != nil {
-		log.Fatalf("Error opening file %v", err)
-	}
+	f := fileLogging()
 	defer f.Close()
-	log.SetOutput(f)
 
 	log.Printf("Using %s directory to store receipts\n",
 		storeReceiptsDirAbsPath)
