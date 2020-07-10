@@ -1,4 +1,4 @@
-package main
+package httpserver
 
 import (
 	"mime/multipart"
@@ -72,9 +72,9 @@ func Test_parseExpiryDate(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := parseExpiryDate(tt.args.tags, tt.args.startDate)
+			got := ParseExpiryDate(tt.args.tags, tt.args.startDate)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%s: parseExpiryDate() = %v, want %v",
+				t.Errorf("%s: ParseExpiryDate() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)
@@ -117,16 +117,16 @@ func Test_parsePurchaseDate(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parsePurchaseDate(tt.args.tags)
+			got, err := ParsePurchaseDate(tt.args.tags)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("%s: parsePurchaseDate() error = %v, wantErr %v",
+				t.Errorf("%s: ParsePurchaseDate() error = %v, wantErr %v",
 					tt.name,
 					err,
 					tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%s: parsePurchaseDate() = %v, want %v",
+				t.Errorf("%s: ParsePurchaseDate() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)
@@ -185,9 +185,9 @@ func Test_normaliseTags(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := normaliseTags(tt.args.tags)
+			got := NormaliseTags(tt.args.tags)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("%s: normaliseTags() = %v, want %v",
+				t.Errorf("%s: NormaliseTags() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)
@@ -224,54 +224,16 @@ func Test_calculateFileHash(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := calculateFileHash(tt.args.binFile, tt.args.formFileHeaders)
+			got, err := CalculateFileHash(tt.args.binFile, tt.args.formFileHeaders)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("%s: calculateFileHash() error = %v, wantErr %v",
+				t.Errorf("%s: CalculateFileHash() error = %v, wantErr %v",
 					tt.name,
 					err,
 					tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("%s: calculateFileHash() = %v, want %v",
-					tt.name,
-					got,
-					tt.want)
-			}
-		})
-	}
-}
-
-func Test_isAllowedFileExt(t *testing.T) {
-	type args struct {
-		fname string
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{
-			"Plain extension",
-			args{"jpg"},
-			false,
-		},
-		{
-			"Allowed jpg",
-			args{"t.jpg"},
-			true,
-		},
-		{
-			"Not allowed csv",
-			args{"t.csv"},
-			false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isAllowedFileExt(tt.args.fname)
-			if got != tt.want {
-				t.Errorf("%s: isAllowerFileExt() = %v, want %v",
+				t.Errorf("%s: CalculateFileHash() = %v, want %v",
 					tt.name,
 					got,
 					tt.want)
