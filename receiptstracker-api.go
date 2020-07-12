@@ -14,16 +14,21 @@ import (
 	"syscall"
 )
 
-var reStripTrailingSlash = regexp.MustCompile(`/$`)
+var reStripTrailingSlash *regexp.Regexp
 var fileStoreAbsPath string
 var loggingFilePath string
+var logFile *os.File
+
+func init() {
+	reStripTrailingSlash = regexp.MustCompile(`/$`)
+}
 
 func fileLogging() (f *os.File) {
 	log.SetFlags(log.Ldate | log.Ltime)
 	f, err := os.OpenFile(
 		loggingFilePath,
 		os.O_RDWR|os.O_CREATE|os.O_APPEND,
-		0666)
+		0600)
 	if err != nil {
 		log.Fatalf("Error opening file %v", err)
 	}
@@ -37,6 +42,10 @@ func signalHandler(signalCh chan os.Signal, doneCh chan struct{}) {
 		case s := <-signalCh:
 			fmt.Println("Shutting down...")
 			log.Printf("Received signal: %d (%s)", s, s)
+			if err := logFile.Sync(); err != nil {
+				log.Printf("ERROR: syncing logfile failed: %v", err)
+			}
+			logFile.Close()
 			os.Exit(0)
 			doneCh <- struct{}{}
 		}
@@ -60,12 +69,14 @@ func main() {
 	}
 	workingDirectory := reStripTrailingSlash.ReplaceAllString(
 		path.Clean(os.Args[1]), "") + "/"
-	os.Chdir(workingDirectory)
+	if err := os.Chdir(workingDirectory); err != nil {
+		log.Printf("ERROR: chdir() failed: %v", err)
+	}
 	loggingFilePath = workingDirectory + "receipts-api.log"
 	storeReceiptsDirAbsPath := workingDirectory + external.UPLOAD_DIRECTORY
 
-	f := fileLogging()
-	defer f.Close()
+	logFile := fileLogging()
+	defer logFile.Close()
 
 	log.Printf("Using %s directory to store receipts\n",
 		storeReceiptsDirAbsPath)
