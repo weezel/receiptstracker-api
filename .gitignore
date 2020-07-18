@@ -1,3 +1,4 @@
+*.db
 img/
 receipts-api.log
 receiptstracker-api
