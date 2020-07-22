@@ -2,8 +2,8 @@ package external
 
 const (
 	PORT             string = ":8081"
-	MAX_FILE_SIZE    int    = 16 * 1024 * 1024
 	UPLOAD_DIRECTORY string = "img"
+	MAX_FILE_SIZE    int64  = 16 * 1024 * 1024
 )
 
 var AllowedExtensions []string = []string{

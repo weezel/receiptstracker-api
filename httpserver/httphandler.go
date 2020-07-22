@@ -27,8 +27,8 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case "POST":
 		// Limit request's maximum size to 16.5 MB
-		r.Body = http.MaxBytesReader(w, r.Body, (16*1024*1024)+512)
-		if err := r.ParseMultipartForm(16 * 1024 * 1024); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, external.MAX_FILE_SIZE+512)
+		if err := r.ParseMultipartForm(external.MAX_FILE_SIZE); err != nil {
 			log.Printf("ERROR: parsing form failed: %v", err)
 			userErrMsg := "Couldn't parse form or mandatory value(s) missing"
 			fmt.Fprintf(w, userErrMsg+"\r\n")
