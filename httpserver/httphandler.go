@@ -36,6 +36,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tags := NormaliseTags(r.FormValue("tags"))
+		log.Printf("Parsed tags: %v", *tags)
 
 		formFile, formFileHeaders, err := r.FormFile("file")
 		if err != nil {
@@ -77,7 +78,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		err = ioutil.WriteFile(writePath, binFile, 0600)
 		if err != nil {
 			log.Printf("Error writing file %s: %v", writePath, err)
-			fmt.Fprintf(w, "Failed to save file \r\n")
+			fmt.Fprintf(w, "Failed to save file\r\n")
 			return
 		}
 		log.Printf("Wrote file to %s", writePath)
@@ -86,6 +87,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("WARNING: no purchase date: %v", err)
 		}
+
 		expiryDate := ParseExpiryDate(tags, purchaseDate)
 		if reflect.DeepEqual(expiryDate, time.Time{}) {
 			log.Printf("WARNING: no expiry date %s: %v",
