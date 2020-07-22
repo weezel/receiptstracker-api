@@ -83,7 +83,7 @@ func main() {
 	logFile := fileLogging()
 	defer logFile.Close()
 
-	db = dbengine.ConnectAndInit("kakka.db")
+	db = dbengine.ConnectAndInit("receipts.db")
 	defer db.Close()
 	dbengine.InitDbConn(db)
 
