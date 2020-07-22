@@ -74,6 +74,12 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			filename)
 		// Write or try to write file
 		writePath := filepath.Join(external.UPLOAD_DIRECTORY, filename)
+		duplicate, err := utils.PathExists(writePath)
+		if duplicate {
+			fmt.Fprint(w, "Error: receipt already archived\r\n")
+			log.Printf("ERROR: Receipt already archived: %v", err)
+			return
+		}
 		err = ioutil.WriteFile(writePath, binFile, 0600)
 		if err != nil {
 			log.Printf("ERROR: writing file %s: %v", writePath, err)
