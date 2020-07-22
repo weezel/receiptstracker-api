@@ -106,13 +106,9 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// XXX Rather leave the DB connection open
-		db := dbengine.DbConn
-
 		// XXX Handle format here
 		receiptId, err := dbengine.InsertReceipt(
 			ctx,
-			db,
 			filename,
 			purchaseDate,
 			expiryDate)
@@ -120,14 +116,13 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			// TODO Show error to user
 			return
 		}
-		tagsWriteSucceed := dbengine.InsertTags(ctx, db, *tags)
+		tagsWriteSucceed := dbengine.InsertTags(ctx, *tags)
 		if tagsWriteSucceed == false {
 			fmt.Fprint(w, "Failed to write tags\r\n")
 			return
 		}
 		tagAssociationCount, err := dbengine.InsertReceiptTagAssociation(
 			ctx,
-			db,
 			receiptId,
 			*tags)
 		if err != nil {

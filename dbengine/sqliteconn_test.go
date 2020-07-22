@@ -12,6 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// This is only needed to get order right and to therefore to compare things.
 type pair struct {
 	receiptId int64
 	tagId     int64
@@ -23,18 +24,18 @@ func (p pairList) Less(i, j int) bool { return p[i].tagId < p[j].tagId }
 func (p pairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func TestInsertTags(t *testing.T) {
+	expectedTags := []string{"yo", "dawg"}
 	memDb, _ := sql.Open("sqlite3", ":memory:")
 	defer memDb.Close()
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(5)*time.Second)
 	defer cancel()
-	expectedTags := []string{"yo", "dawg"}
 
-	CreateSchema(ctx, memDb)
+	UpdateDbRef(memDb)
+	CreateSchema(memDb)
 
 	type args struct {
 		ctx  context.Context
-		db   *sql.DB
 		tags []string
 	}
 
@@ -45,13 +46,13 @@ func TestInsertTags(t *testing.T) {
 	}{
 		{
 			"Insert tags",
-			args{ctx, memDb, expectedTags},
+			args{ctx, expectedTags},
 			true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := InsertTags(tt.args.ctx, tt.args.db, tt.args.tags)
+			got := InsertTags(tt.args.ctx, tt.args.tags)
 			if got != tt.want {
 				t.Errorf("%s: InsertTags() = %v, want %v",
 					tt.name,
@@ -75,17 +76,20 @@ func TestInsertTags(t *testing.T) {
 	if !reflect.DeepEqual(insertedTags, expectedTags) {
 		t.Errorf("ERROR: mismatch in insertedTags: %v", insertedTags)
 	}
+
+	ShutdownDb()
 }
 
 func TestgetTagsIds(t *testing.T) {
+	expectedTags := []string{"computershop", "laptop", "2019-05-15"}
 	memDb, _ := sql.Open("sqlite3", ":memory:")
 	defer memDb.Close()
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(5)*time.Second)
 	defer cancel()
-	expectedTags := []string{"computershop", "laptop", "2019-05-15"}
 
-	CreateSchema(ctx, memDb)
+	UpdateDbRef(memDb)
+	CreateSchema(memDb)
 
 	_, err := memDb.Exec(`INSERT INTO tag (tag) VALUES ('computershop'), ('laptop'), ('2019-05-15');`)
 	if err != nil {
@@ -94,7 +98,6 @@ func TestgetTagsIds(t *testing.T) {
 
 	type args struct {
 		ctx  context.Context
-		db   *sql.DB
 		tags []string
 	}
 	tests := []struct {
@@ -104,7 +107,7 @@ func TestgetTagsIds(t *testing.T) {
 	}{
 		{
 			"Laptop purchase",
-			args{ctx, memDb, expectedTags},
+			args{ctx, expectedTags},
 			map[int]string{
 				1: expectedTags[0],
 				2: expectedTags[1],
@@ -114,7 +117,7 @@ func TestgetTagsIds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getTagsIds(tt.args.ctx, tt.args.db, tt.args.tags)
+			got := getTagsIds(tt.args.ctx, tt.args.tags)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("%s: GetTagsIds() = %v, want %v",
 					tt.name,
@@ -123,17 +126,20 @@ func TestgetTagsIds(t *testing.T) {
 			}
 		})
 	}
+
+	ShutdownDb()
 }
 
 func TestInsertReceiptTagAssociation(t *testing.T) {
+	expectedTags := []string{"computershop", "laptop", "2019-05-15"}
 	memDb, _ := sql.Open("sqlite3", ":memory:")
 	defer memDb.Close()
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(5)*time.Second)
 	defer cancel()
-	expectedTags := []string{"computershop", "laptop", "2019-05-15"}
 
-	CreateSchema(ctx, memDb)
+	UpdateDbRef(memDb)
+	CreateSchema(memDb)
 
 	_, err := memDb.Exec(`INSERT INTO tag (tag) VALUES ('computershop'), ('laptop'), ('2019-05-15');`)
 	if err != nil {
@@ -142,7 +148,6 @@ func TestInsertReceiptTagAssociation(t *testing.T) {
 
 	type args struct {
 		ctx       context.Context
-		db        *sql.DB
 		receiptId int64
 		tags      []string
 	}
@@ -154,7 +159,7 @@ func TestInsertReceiptTagAssociation(t *testing.T) {
 	}{
 		{
 			"Simple association",
-			args{ctx, memDb, 0, expectedTags},
+			args{ctx, 0, expectedTags},
 			3,
 			false,
 		},
@@ -163,7 +168,6 @@ func TestInsertReceiptTagAssociation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := InsertReceiptTagAssociation(
 				tt.args.ctx,
-				tt.args.db,
 				tt.args.receiptId,
 				tt.args.tags)
 			if (err != nil) != tt.wantErr {
@@ -219,4 +223,6 @@ func TestInsertReceiptTagAssociation(t *testing.T) {
 	if !reflect.DeepEqual(insertedAssociations, expectedAssociations) {
 		t.Errorf("ERROR: mismatch in insertedAssociations: %v", insertedAssociations)
 	}
+
+	ShutdownDb()
 }

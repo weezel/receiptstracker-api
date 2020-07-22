@@ -21,7 +21,6 @@ var (
 	loggingFilePath      string
 	reStripTrailingSlash *regexp.Regexp
 	logFile              *os.File
-	db                   *sql.DB
 )
 
 func init() {
@@ -47,14 +46,32 @@ func signalHandler(signalCh chan os.Signal, doneCh chan struct{}) {
 		case s := <-signalCh:
 			fmt.Println("Shutting down...")
 			log.Printf("Received signal: %d (%s)", s, s)
-			if err := logFile.Sync(); err != nil {
+
+			if err := logFile.Sync(); err != nil { // FIXME
 				log.Printf("ERROR: syncing logfile failed: %v", err)
 			}
-			logFile.Close()
+
+			dbengine.ShutdownDb()
+
+			if err := logFile.Close(); err != nil { // FIXME
+				log.Printf("ERROR: Failed to close logfile: %v", err)
+			}
 			os.Exit(0)
 			doneCh <- struct{}{}
 		}
 	}
+}
+
+func connectAndInitDb(dbPath string) *sql.DB {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if exists, _ := utils.PathExists(dbPath); exists == false {
+		dbengine.CreateSchema(db)
+	}
+
+	return db
 }
 
 func main() {
@@ -83,9 +100,10 @@ func main() {
 	logFile := fileLogging()
 	defer logFile.Close()
 
-	db = dbengine.ConnectAndInit("receipts.db")
-	defer db.Close()
-	dbengine.InitDbConn(db)
+	db := connectAndInitDb("receipts.db")
+	dbengine.UpdateDbRef(db)
+	db = nil // Remove reference from the main
+	log.Printf("Database ready")
 
 	log.Printf("Using %s directory to store receipts\n",
 		storeReceiptsDirAbsPath)

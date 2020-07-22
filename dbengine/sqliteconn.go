@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"receiptstracker-api/utils"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -33,11 +32,20 @@ CREATE TABLE receipt_tag_association (
 `
 
 var (
-	DbConn *sql.DB
+	dbConn *sql.DB
 )
 
-func InitDbConn(db *sql.DB) {
-	DbConn = db
+func UpdateDbRef(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	dbConn = db
+}
+
+func ShutdownDb() {
+	if err := dbConn.Close(); err != nil {
+		log.Printf("ERROR: Closing db: %v", err)
+	}
 }
 
 func CreateSchema(db *sql.DB) {
@@ -48,27 +56,13 @@ func CreateSchema(db *sql.DB) {
 	}
 }
 
-func ConnectAndInit(dbPath string) *sql.DB {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Create schema if doesn't exist
-	if exists, _ := utils.PathExists(dbPath); exists == false {
-		CreateSchema(db)
-	}
-
-	return db
-}
-
 // InsertReceipt returns true if insert succeeds, false otherwise
 func InsertReceipt(
 	ctx context.Context,
-	db *sql.DB,
 	filename string,
 	purchaseDate string,
 	expiryDate string) (int64, error) {
-	stmt, err := db.PrepareContext(ctx, `
+	stmt, err := dbConn.PrepareContext(ctx, `
 INSERT OR IGNORE INTO receipt(
 	filename,
 	purchase_date,
@@ -98,7 +92,7 @@ INSERT OR IGNORE INTO receipt(
 	return receiptId, nil
 }
 
-func InsertTags(ctx context.Context, db *sql.DB, tags []string) bool {
+func InsertTags(ctx context.Context, tags []string) bool {
 	rawSql := "INSERT OR IGNORE INTO tag (tag) VALUES "
 	values := []interface{}{}
 
@@ -108,7 +102,7 @@ func InsertTags(ctx context.Context, db *sql.DB, tags []string) bool {
 	}
 	// Remove comma postfix
 	rawSql = rawSql[0 : len(rawSql)-1]
-	stmt, err := db.PrepareContext(ctx, rawSql)
+	stmt, err := dbConn.PrepareContext(ctx, rawSql)
 	if err != nil {
 		log.Printf("ERROR: preparing statement for tags failed: %v",
 			err)
@@ -128,13 +122,12 @@ func InsertTags(ctx context.Context, db *sql.DB, tags []string) bool {
 
 func InsertReceiptTagAssociation(
 	ctx context.Context,
-	db *sql.DB,
 	receiptId int64,
 	tags []string) (int64, error) {
 	values := []interface{}{}
 	rawSql := "INSERT OR IGNORE INTO receipt_tag_association (receipt_id, tag_id) VALUES "
 
-	tagIds := getTagsIds(ctx, db, tags)
+	tagIds := getTagsIds(ctx, tags)
 	for tagId, _ := range tagIds {
 		values = append(values, receiptId)
 		values = append(values, tagId)
@@ -143,7 +136,7 @@ func InsertReceiptTagAssociation(
 	// Remove comma postfix
 	rawSql = rawSql[0 : len(rawSql)-1]
 
-	stmt, err := db.PrepareContext(ctx, rawSql)
+	stmt, err := dbConn.PrepareContext(ctx, rawSql)
 	if err != nil {
 		log.Printf("ERROR: preparing statement for tag ids failed: %v", err)
 		return 0, err
@@ -164,7 +157,7 @@ func InsertReceiptTagAssociation(
 	return affected, nil
 }
 
-func getTagsIds(ctx context.Context, db *sql.DB, tags []string) map[int64]string {
+func getTagsIds(ctx context.Context, tags []string) map[int64]string {
 	rawSql := "SELECT id, tag FROM tag WHERE tag IN ("
 	values := []interface{}{}
 
@@ -175,7 +168,7 @@ func getTagsIds(ctx context.Context, db *sql.DB, tags []string) map[int64]string
 	// Remove comma postfix
 	rawSql = rawSql[0 : len(rawSql)-1]
 	rawSql += ");"
-	stmt, err := db.PrepareContext(ctx, rawSql)
+	stmt, err := dbConn.PrepareContext(ctx, rawSql)
 	if err != nil {
 		log.Printf("ERROR: preparing statement for tag ids failed: %v", err)
 		return map[int64]string{}
