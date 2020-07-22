@@ -22,13 +22,13 @@ func ParsePurchaseDate(tags *[]string) (time.Time, error) {
 	for i, t := range *tags {
 		found := purchaseDatePat.FindString(t)
 		if found == "" {
-			return time.Time{}, errors.New("Couldn't find or parse date")
+			continue
 		}
 
 		dtime, err := time.Parse("2006-01-02", t)
 		if err != nil {
-			log.Printf("Error while parsing date '%s'", t)
-			return time.Time{}, err
+			log.Printf("ERROR: while parsing date '%s'", t)
+			continue
 		}
 		*tags = utils.DeleteFromSlice(*tags, i)
 		return dtime, nil
@@ -38,7 +38,7 @@ func ParsePurchaseDate(tags *[]string) (time.Time, error) {
 
 // ParseExpiryDate goes through the tags and returns
 // the match of first occurrence of expiry date.
-func ParseExpiryDate(tags *[]string, startDate time.Time) time.Time {
+func ParseExpiryDate(tags *[]string, startDate time.Time) (time.Time, error) {
 	for i, t := range *tags {
 		found := expiryDatePat.FindString(t)
 		if found == "" {
@@ -63,18 +63,18 @@ func ParseExpiryDate(tags *[]string, startDate time.Time) time.Time {
 		years := regexp.MustCompile(`years?$`).FindString(t)
 		if days != "" {
 			*tags = utils.DeleteFromSlice(*tags, i)
-			return startDate.AddDate(0, 0, numberVal)
+			return startDate.AddDate(0, 0, numberVal), nil
 		}
 		if months != "" {
 			*tags = utils.DeleteFromSlice(*tags, i)
-			return startDate.AddDate(0, numberVal, 0)
+			return startDate.AddDate(0, numberVal, 0), nil
 		}
 		if years != "" {
 			*tags = utils.DeleteFromSlice(*tags, i)
-			return startDate.AddDate(numberVal, 0, 0)
+			return startDate.AddDate(numberVal, 0, 0), nil
 		}
 	}
-	return time.Time{}
+	return time.Time{}, errors.New("No expiry time found")
 }
 
 func CalculateFileHash(binFile []byte,

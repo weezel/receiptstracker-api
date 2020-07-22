@@ -9,14 +9,12 @@ import (
 	"receiptstracker-api/dbengine"
 	"receiptstracker-api/external"
 	"receiptstracker-api/utils"
-	"reflect"
-	"time"
 )
 
 func ApiHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	log.Printf("Incoming %s [%s] connection from %s with size %d bytes",
+	log.Printf("Incoming %s [%v] connection from %s with size %d bytes",
 		r.Method,
 		r.Header,
 		r.RemoteAddr,
@@ -88,16 +86,24 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Wrote file to %s", writePath)
 
-		purchaseDate, err := ParsePurchaseDate(tags)
+		var expiryDate string = ""
+		var purchaseDate string = ""
+		purchaseDateTmp, err := ParsePurchaseDate(tags)
 		if err != nil {
 			log.Printf("WARNING: no purchase date: %v", err)
-		}
+		} else {
+			purchaseDate = purchaseDateTmp.Format("2006-01-02")
+			log.Printf("Found and parsed purchase date: %s",
+				purchaseDate)
 
-		expiryDate := ParseExpiryDate(tags, purchaseDate)
-		if reflect.DeepEqual(expiryDate, time.Time{}) {
-			log.Printf("WARNING: no expiry date %s: %v",
-				expiryDate,
-				err)
+			expiryDateTmp, err := ParseExpiryDate(tags, purchaseDateTmp)
+			if err != nil {
+				log.Printf("WARNING: no expiry date: %v", err)
+			} else {
+				expiryDate = expiryDateTmp.Format("2006-01-02")
+				log.Printf("Found and parsed expiry date: %s",
+					expiryDate)
+			}
 		}
 
 		// XXX Rather leave the DB connection open
@@ -108,8 +114,8 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			ctx,
 			db,
 			filename,
-			purchaseDate.Format(""),
-			expiryDate.Format(""))
+			purchaseDate,
+			expiryDate)
 		if err != nil {
 			// TODO Show error to user
 			return

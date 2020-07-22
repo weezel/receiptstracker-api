@@ -116,17 +116,10 @@ func InsertTags(ctx context.Context, db *sql.DB, tags []string) bool {
 	}
 	defer stmt.Close()
 
-	res, err := stmt.ExecContext(ctx, values...)
+	_, err = stmt.ExecContext(ctx, values...)
 	if err != nil {
 		log.Printf("ERROR: inserting tags failed: %v", err)
-		return false
-	}
-	if res == nil {
-		log.Printf("ERROR: tag res was nil: %v", err)
-		return false
-	}
-	affected, err := res.RowsAffected()
-	if affected > 0 {
+	} else {
 		return true
 	}
 
