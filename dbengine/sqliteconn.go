@@ -32,22 +32,30 @@ CREATE TABLE receipt_tag_association (
 );
 `
 
-func CreateSchema(ctx context.Context, db *sql.DB) {
-	_, err := db.ExecContext(ctx, sqlSchema)
+var (
+	DbConn *sql.DB
+)
+
+func InitDbConn(db *sql.DB) {
+	DbConn = db
+}
+
+func CreateSchema(db *sql.DB) {
+	_, err := db.Exec(sqlSchema)
 	if err != nil {
 		errMsg := fmt.Sprintf("ERROR: schema creation failed: %v", err)
 		log.Fatal(errMsg)
 	}
 }
 
-func ConnectAndInit(ctx context.Context, dbPath string) *sql.DB {
+func ConnectAndInit(dbPath string) *sql.DB {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Create schema if doesn't exist
 	if exists, _ := utils.PathExists(dbPath); exists == false {
-		CreateSchema(ctx, db)
+		CreateSchema(db)
 	}
 
 	return db
@@ -102,7 +110,8 @@ func InsertTags(ctx context.Context, db *sql.DB, tags []string) bool {
 	rawSql = rawSql[0 : len(rawSql)-1]
 	stmt, err := db.PrepareContext(ctx, rawSql)
 	if err != nil {
-		log.Printf("ERROR: preparing statement for tags failed: %v", err)
+		log.Printf("ERROR: preparing statement for tags failed: %v",
+			err)
 		return false
 	}
 	defer stmt.Close()

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"receiptstracker-api/dbengine"
 	"receiptstracker-api/external"
 	"receiptstracker-api/utils"
 	"reflect"
@@ -13,6 +14,8 @@ import (
 )
 
 func ApiHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	log.Printf("Incoming %s [%s] connection from %s with size %d bytes",
 		r.Method,
 		r.Header,
@@ -94,6 +97,38 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 				expiryDate,
 				err)
 		}
+
+		// XXX Rather leave the DB connection open
+		db := dbengine.DbConn
+
+		// XXX Handle format here
+		receiptId, err := dbengine.InsertReceipt(
+			ctx,
+			db,
+			filename,
+			purchaseDate.Format(""),
+			expiryDate.Format(""))
+		if err != nil {
+			// TODO Show error to user
+			return
+		}
+		tagsWriteSucceed := dbengine.InsertTags(ctx, db, *tags)
+		if tagsWriteSucceed == false {
+			fmt.Fprint(w, "Failed to write tags\r\n")
+			return
+		}
+		tagAssociationCount, err := dbengine.InsertReceiptTagAssociation(
+			ctx,
+			db,
+			receiptId,
+			*tags)
+		if err != nil {
+			fmt.Fprintf(w, "Failed to write receipt ID <-> tag IDs associations")
+			return
+		}
+		log.Printf("Wrote %d number of associations for receipt ID %d",
+			tagAssociationCount,
+			receiptId)
 
 		doneMsg := fmt.Sprintf("Storing of receipt %s completed",
 			filename)

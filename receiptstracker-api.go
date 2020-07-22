@@ -1,12 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path"
+	"receiptstracker-api/dbengine"
 	"receiptstracker-api/external"
 	"receiptstracker-api/httpserver"
 	"receiptstracker-api/utils"
@@ -14,10 +16,13 @@ import (
 	"syscall"
 )
 
-var reStripTrailingSlash *regexp.Regexp
-var fileStoreAbsPath string
-var loggingFilePath string
-var logFile *os.File
+var (
+	fileStoreAbsPath     string
+	loggingFilePath      string
+	reStripTrailingSlash *regexp.Regexp
+	logFile              *os.File
+	db                   *sql.DB
+)
 
 func init() {
 	reStripTrailingSlash = regexp.MustCompile(`/$`)
@@ -77,6 +82,10 @@ func main() {
 
 	logFile := fileLogging()
 	defer logFile.Close()
+
+	db = dbengine.ConnectAndInit("kakka.db")
+	defer db.Close()
+	dbengine.InitDbConn(db)
 
 	log.Printf("Using %s directory to store receipts\n",
 		storeReceiptsDirAbsPath)
