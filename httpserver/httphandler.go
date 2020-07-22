@@ -34,7 +34,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseMultipartForm(external.MAX_FILE_SIZE); err != nil {
 			log.Printf("ERROR: parsing form failed: %v", err)
 			userErrMsg := "Couldn't parse form or mandatory value(s) missing"
-			fmt.Fprintf(w, userErrMsg+"\r\n")
+			fmt.Fprint(w, userErrMsg+"\r\n")
 			return
 		}
 
@@ -44,10 +44,9 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		formFile, formFileHeaders, err := r.FormFile("file")
 		if err != nil {
 			log.Printf("ERROR: no file included")
-			fmt.Fprintf(w, "Missing 'file' parameter\r\n")
+			fmt.Fprint(w, "Missing 'file' parameter\r\n")
 			return
 		}
-
 		if utils.IsAllowedFileExt(formFileHeaders.Filename) == false {
 			log.Printf("ERROR: file extension not allowed: %s",
 				formFileHeaders.Filename)
@@ -55,8 +54,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 				external.AllowedExtensions)
 			return
 		}
-
-		// Get the binary of the form file
+		// Get binary from form
 		binFile, err := ioutil.ReadAll(formFile)
 		if err != nil {
 			log.Printf("ERROR: reading file %s failed: %v",
@@ -65,23 +63,21 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, "Error while reading file binary\r\n")
 			return
 		}
-
 		filename, err := CalculateFileHash(binFile, formFileHeaders)
 		if err != nil {
 			log.Printf("ERROR: %s", err)
 			fmt.Fprintf(w, "%s\r\n", err)
 			return
 		}
-		log.Printf("Hash for incoming filename %s is %s",
+		log.Printf("Hash of incoming filename %s is %s",
 			formFileHeaders.Filename,
 			filename)
-
 		// Write or try to write file
 		writePath := filepath.Join(external.UPLOAD_DIRECTORY, filename)
 		err = ioutil.WriteFile(writePath, binFile, 0600)
 		if err != nil {
-			log.Printf("Error writing file %s: %v", writePath, err)
-			fmt.Fprintf(w, "Failed to save file\r\n")
+			log.Printf("ERROR: writing file %s: %v", writePath, err)
+			fmt.Fprint(w, "Failed to save file\r\n")
 			return
 		}
 		log.Printf("Wrote file to %s", writePath)
@@ -123,7 +119,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 			receiptId,
 			*tags)
 		if err != nil {
-			fmt.Fprintf(w, "Failed to write receipt ID <-> tag IDs associations")
+			fmt.Fprint(w, "Failed to write receipt ID <-> tag IDs associations")
 			return
 		}
 		log.Printf("Wrote %d number of associations for receipt ID %d",
@@ -133,8 +129,9 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		doneMsg := fmt.Sprintf("Storing of receipt %s completed",
 			filename)
 		log.Print(doneMsg)
-		fmt.Fprintf(w, doneMsg+"\r\n")
+		fmt.Fprint(w, doneMsg+"\r\n")
 	default:
-		fmt.Fprintf(w, "Supported methods: GET, POST\r\n")
+		fmt.Fprint(w, "Supported methods: GET, POST\r\n")
+		return
 	}
 }
