@@ -36,6 +36,8 @@ func ParsePurchaseDate(tags *[]string) (time.Time, error) {
 	return time.Time{}, errors.New("Couldn't find or parse date")
 }
 
+// ParseExpiryDate goes through the tags and returns
+// the match of first occurrence of expiry date.
 func ParseExpiryDate(tags *[]string, startDate time.Time) time.Time {
 	for i, t := range *tags {
 		found := expiryDatePat.FindString(t)
@@ -45,16 +47,17 @@ func ParseExpiryDate(tags *[]string, startDate time.Time) time.Time {
 
 		parsedNumber := regexp.MustCompile(`[0-9]+`).FindString(t)
 		if parsedNumber == "" {
-			log.Printf("Found day|month|year %s but couldn't parse numbers", t)
+			errorMsg := "Found day|month|year %s but couldn't parse numbers"
+			log.Printf(errorMsg, t)
 			continue
 		}
+
 		var numberVal int
 		numberVal, err := strconv.Atoi(parsedNumber)
 		if err != nil {
 			log.Printf("Error while parsing %s as a number", parsedNumber)
 			continue
 		}
-
 		days := regexp.MustCompile(`days?$`).FindString(t)
 		months := regexp.MustCompile(`months?$`).FindString(t)
 		years := regexp.MustCompile(`years?$`).FindString(t)
