@@ -97,8 +97,7 @@ func main() {
 	loggingFilePath = workingDirectory + "receipts-api.log"
 	storeReceiptsDirAbsPath := workingDirectory + external.UPLOAD_DIRECTORY
 
-	logFile := fileLogging()
-	defer logFile.Close()
+	logFile = fileLogging()
 
 	db := connectAndInitDb("receipts.db")
 	dbengine.UpdateDbRef(db)
